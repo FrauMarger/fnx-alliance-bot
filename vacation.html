@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Добавить в отпуск</title>
+  <style>
+    body { font-family: sans-serif; padding: 15px; background: var(--tg-theme-bg-color, #ffffff); color: var(--tg-theme-text-color, #000000); margin: 0; }
+    input, select, textarea { width: 100%; padding: 10px; margin: 5px 0 15px 0; box-sizing: border-box; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+    label { font-weight: bold; font-size: 14px; }
+    button { background: var(--tg-theme-button-color, #4285f4); color: var(--tg-theme-button-text-color, #ffffff); padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; }
+    button:disabled { opacity: 0.6; }
+    #status { font-size: 13px; margin-top: 10px; white-space: pre-wrap; }
+    #status.error { color: #c00; }
+    #status.success { color: #0a0; }
+  </style>
+</head>
+<body>
+  <h3>🏖 Добавить в отпуск</h3>
+  <form id="vacForm">
+    <label>Ник игрока:</label>
+    <input list="nickList" id="nick" required placeholder="Введите ник...">
+    <datalist id="nickList"></datalist>
+
+    <label>Тип отсутствия:</label>
+    <select id="type" required>
+      <option value="Отпуск">🌴 Отпуск (полное отсутствие)</option>
+      <option value="Временные пропуски">⚠️ Временные пропуски (интернет/работа)</option>
+    </select>
+
+    <label>Дата начала:</label>
+    <input type="date" id="startDate" required>
+
+    <label>Дата окончания (если известна):</label>
+    <input type="date" id="endDate">
+
+    <label>Комментарий:</label>
+    <textarea id="comment" rows="2" placeholder="Причина, заметки..."></textarea>
+
+    <button type="button" id="saveBtn">Сохранить</button>
+    <div id="status"></div>
+  </form>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+    if (tg) { tg.expand(); tg.ready(); }
+
+    // Параметры передаются ботом в URL кнопки: chatId, userId, api (адрес Apps Script)
+    var params = new URLSearchParams(window.location.search);
+    var chatId = params.get('chatId');
+    var userId = params.get('userId');
+    var apiUrl = decodeURIComponent(params.get('api') || '');
+
+    var statusEl = document.getElementById('status');
+    function showStatus(msg, cls) {
+      statusEl.textContent = msg;
+      statusEl.className = cls || '';
+    }
+
+    if (!apiUrl) {
+      showStatus('⚠️ Не удалось определить адрес сервера. Откройте форму заново через /start.', 'error');
+    }
+
+    // Сегодняшняя дата по умолчанию
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementById('startDate').value = today;
+
+    document.getElementById('saveBtn').addEventListener('click', function () {
+      var nick = document.getElementById('nick').value.trim();
+      if (!nick) { showStatus('⚠️ Укажите ник игрока', 'error'); return; }
+      if (!apiUrl || !chatId) { showStatus('⚠️ Нет связи с сервером — откройте форму заново через /start', 'error'); return; }
+
+      var payload = {
+        formType: 'vacation',
+        chatId: chatId,
+        userId: userId,
+        nick: nick,
+        type: document.getElementById('type').value,
+        startDate: document.getElementById('startDate').value,
+        endDate: document.getElementById('endDate').value,
+        comment: document.getElementById('comment').value
+      };
+
+      document.getElementById('saveBtn').disabled = true;
+      showStatus('Сохраняю...');
+
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // text/plain — чтобы избежать CORS preflight
+        body: JSON.stringify(payload)
+      })
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          if (data.ok) {
+            showStatus('✅ ' + data.message, 'success');
+            setTimeout(function () { if (tg) tg.close(); }, 1200);
+          } else {
+            showStatus('❌ ' + (data.message || 'Ошибка сохранения'), 'error');
+            document.getElementById('saveBtn').disabled = false;
+          }
+        })
+        .catch(function (err) {
+          showStatus('❌ Ошибка соединения: ' + err.message, 'error');
+          document.getElementById('saveBtn').disabled = false;
+        });
+    });
+  </script>
+</body>
+</html>
