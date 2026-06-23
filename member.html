@@ -60,6 +60,22 @@
 
     if (!apiUrl) {
       showStatus('⚠️ Не удалось определить адрес сервера. Откройте форму заново через /start.', 'error');
+    } else {
+      fetch(apiUrl + '?action=nicknames')
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          if (data.ok && Array.isArray(data.nicknames)) {
+            var list = document.getElementById('nickList');
+            data.nicknames.forEach(function (n) {
+              var opt = document.createElement('option');
+              opt.value = n;
+              list.appendChild(opt);
+            });
+          }
+        })
+        .catch(function (err) {
+          console.log('Не удалось загрузить список ников: ' + err.message);
+        });
     }
 
     var today = new Date().toISOString().split('T')[0];
