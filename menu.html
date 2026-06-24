@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Меню альянса</title>
+  <style>
+    body { font-family: sans-serif; padding: 15px; background: var(--tg-theme-bg-color, #ffffff); color: var(--tg-theme-text-color, #000000); margin: 0; }
+    h3 { margin-top: 0; }
+    .menu-btn {
+      display: block; width: 100%; box-sizing: border-box; text-align: left;
+      background: var(--tg-theme-secondary-bg-color, #f0f0f0); color: var(--tg-theme-text-color, #000000);
+      padding: 14px; margin: 6px 0; border: none; border-radius: 8px; cursor: pointer; font-size: 15px;
+    }
+    .menu-btn:active { opacity: 0.7; }
+    #resultArea { margin-top: 15px; }
+    .section-title { font-weight: bold; margin: 14px 0 6px 0; font-size: 14px; }
+    .row { padding: 6px 0; border-bottom: 1px solid rgba(128,128,128,0.15); font-size: 14px; }
+    .back-btn {
+      background: var(--tg-theme-button-color, #4285f4); color: var(--tg-theme-button-text-color, #ffffff);
+      padding: 10px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; margin-top: 10px;
+    }
+    #loading { font-size: 13px; color: #888; }
+    #errorMsg { font-size: 13px; color: #c00; }
+  </style>
+</head>
+<body>
+  <div id="mainView">
+    <h3>🛠 Меню альянса</h3>
+    <button class="menu-btn" data-action="top" data-metric="ba">⚔️ Топ/Аутсайдеры БА (сегодня)</button>
+    <button class="menu-btn" data-action="topweek" data-metric="ba">⚔️ Топ/Аутсайдеры БА (неделя)</button>
+    <button class="menu-btn" data-action="top" data-metric="contrib">💰 Топ/Аутсайдеры Взносы (сегодня)</button>
+    <button class="menu-btn" data-action="topweek" data-metric="contrib">💰 Топ/Аутсайдеры Взносы (неделя)</button>
+    <button class="menu-btn" id="goVacation">🏖 Добавить в отпуск</button>
+    <button class="menu-btn" id="goMember">📋 Вступил / Вышел / Исключен</button>
+  </div>
+
+  <div id="resultArea" style="display:none;">
+    <div id="loading" style="display:none;">Загружаю...</div>
+    <div id="errorMsg" style="display:none;"></div>
+    <div id="resultContent"></div>
+    <button class="back-btn" id="backBtn">← Назад в меню</button>
+  </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+    if (tg) { tg.expand(); tg.ready(); }
+
+    var params = new URLSearchParams(window.location.search);
+    var apiUrl = decodeURIComponent(params.get('api') || '');
+    var chatId = params.get('chatId') || '';
+    var userId = params.get('userId') || '';
+
+    var mainView = document.getElementById('mainView');
+    var resultArea = document.getElementById('resultArea');
+    var loadingEl = document.getElementById('loading');
+    var errorEl = document.getElementById('errorMsg');
+    var contentEl = document.getElementById('resultContent');
+
+    function showMenu() {
+      mainView.style.display = 'block';
+      resultArea.style.display = 'none';
+    }
+
+    function showResult() {
+      mainView.style.display = 'none';
+      resultArea.style.display = 'block';
+    }
+
+    document.getElementById('backBtn').addEventListener('click', showMenu);
+
+    document.getElementById('goVacation').addEventListener('click', function () {
+      var url = 'vacation.html?chatId=' + encodeURIComponent(chatId) + '&userId=' + encodeURIComponent(userId) + '&api=' + encodeURIComponent(apiUrl);
+      window.location.href = url;
+    });
+
+    document.getElementById('goMember').addEventListener('click', function () {
+      var url = 'member.html?chatId=' + encodeURIComponent(chatId) + '&userId=' + encodeURIComponent(userId) + '&api=' + encodeURIComponent(apiUrl);
+      window.location.href = url;
+    });
+
+    function formatNumber(n) {
+      return Number(n).toLocaleString('ru-RU');
+    }
+
+    function renderTopBottom(data, fieldLabel) {
+      if (data.error) {
+        errorEl.textContent = data.error;
+        errorEl.style.display = 'block';
+        return;
+      }
+      var html = '<div class="section-title">📅 ' + (data.date || '') + '</div>';
+      html += '<div class="section-title">🔥 ТОП-10 (' + fieldLabel + ')</div>';
+      data.top10.forEach(function (p, idx) {
+        html += '<div class="row">' + (idx + 1) + '. ' + p.nick + ' (' + p.rank + ', ур.' + p.level + ') — ' + formatNumber(p.value) + '</div>';
+      });
+      html += '<div class="section-title">❄️ АУТСАЙДЕРЫ (' + fieldLabel + ')</div>';
+      data.bottom10.forEach(function (p, idx) {
+        html += '<div class="row">' + (idx + 1) + '. ' + p.nick + ' (' + p.rank + ', ур.' + p.level + ') — ' + formatNumber(p.value) + '</div>';
+      });
+      contentEl.innerHTML = html;
+    }
+
+    function renderWeekly(data) {
+      if (data.error) {
+        errorEl.textContent = data.error;
+        errorEl.style.display = 'block';
+        return;
+      }
+      var html = '<div class="section-title">' + (data.title || '') + '</div>';
+      if (data.subtitle) html += '<div style="font-size:13px;color:#888;margin-bottom:8px;">' + data.subtitle + '</div>';
+      data.rows.forEach(function (row, idx) {
+        html += '<div class="row">' + (idx + 1) + '. ' + row.nick + ' (' + row.rank + ', ур.' + row.level + ') — ' + row.value + (row.extra ? (' ' + row.extra) : '') + '</div>';
+      });
+      contentEl.innerHTML = html;
+    }
+
+    function loadTop(metric) {
+      showResult();
+      loadingEl.style.display = 'block';
+      errorEl.style.display = 'none';
+      contentEl.innerHTML = '';
+
+      fetch(apiUrl + '?action=top&metric=' + metric)
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          loadingEl.style.display = 'none';
+          var fieldLabel = (metric === 'ba') ? 'очков БА' : 'взносов';
+          renderTopBottom(data, fieldLabel);
+        })
+        .catch(function (err) {
+          loadingEl.style.display = 'none';
+          errorEl.textContent = '❌ Ошибка соединения: ' + err.message;
+          errorEl.style.display = 'block';
+        });
+    }
+
+    function loadTopWeek(metric) {
+      showResult();
+      loadingEl.style.display = 'block';
+      errorEl.style.display = 'none';
+      contentEl.innerHTML = '';
+
+      fetch(apiUrl + '?action=topweek&metric=' + metric)
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          loadingEl.style.display = 'none';
+          renderWeekly(data);
+        })
+        .catch(function (err) {
+          loadingEl.style.display = 'none';
+          errorEl.textContent = '❌ Ошибка соединения: ' + err.message;
+          errorEl.style.display = 'block';
+        });
+    }
+
+    document.querySelectorAll('.menu-btn[data-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!apiUrl) {
+          alert('Не удалось определить адрес сервера. Откройте меню заново.');
+          return;
+        }
+        var action = btn.getAttribute('data-action');
+        var metric = btn.getAttribute('data-metric');
+        if (action === 'top') loadTop(metric);
+        if (action === 'topweek') loadTopWeek(metric);
+      });
+    });
+  </script>
+</body>
+</html>
