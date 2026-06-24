@@ -21,7 +21,7 @@
       padding: 10px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 14px; margin-top: 10px;
     }
     #loading { font-size: 13px; color: #888; }
-    #errorMsg { font-size: 13px; color: #c00; }
+    #errorMsg { font-size: 13px; color: #c00; white-space: pre-wrap; word-break: break-all; }
   </style>
 </head>
 <body>
@@ -122,8 +122,15 @@
       errorEl.style.display = 'none';
       contentEl.innerHTML = '';
 
-      fetch(apiUrl + '?action=top&metric=' + metric)
-        .then(function (resp) { return resp.json(); })
+      var fullUrl = apiUrl + '?action=top&metric=' + metric;
+
+      fetch(fullUrl)
+        .then(function (resp) {
+          if (!resp.ok) {
+            throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+          }
+          return resp.json();
+        })
         .then(function (data) {
           loadingEl.style.display = 'none';
           var fieldLabel = (metric === 'ba') ? 'очков БА' : 'взносов';
@@ -131,7 +138,7 @@
         })
         .catch(function (err) {
           loadingEl.style.display = 'none';
-          errorEl.textContent = '❌ Ошибка соединения: ' + err.message;
+          errorEl.textContent = '❌ Ошибка: ' + err.message + '\n\nЗапрос к: ' + fullUrl + '\n\napiUrl raw param: ' + (params.get('api') || '(пусто)');
           errorEl.style.display = 'block';
         });
     }
