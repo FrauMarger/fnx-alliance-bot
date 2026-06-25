@@ -50,6 +50,13 @@
     var params = new URLSearchParams(window.location.search);
     var chatId = params.get('chatId');
     var userId = params.get('userId');
+
+    // Запасной вариант, если параметры не пришли в URL (например, форма открыта
+    // напрямую, минуя menu.html) — берём из самого Telegram WebApp SDK.
+    if ((!chatId || !userId) && tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+      if (!userId) userId = String(tg.initDataUnsafe.user.id);
+      if (!chatId) chatId = userId;
+    }
     var apiUrl = decodeURIComponent(params.get('api') || '');
 
     var statusEl = document.getElementById('status');
