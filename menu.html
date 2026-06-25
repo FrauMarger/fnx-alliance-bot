@@ -52,6 +52,18 @@
     var chatId = params.get('chatId') || '';
     var userId = params.get('userId') || '';
 
+    // Когда форма открыта через постоянную Menu Button (а не через inline-кнопку
+    // конкретного сообщения), chatId/userId не передаются в URL — их нужно брать
+    // из самого Telegram WebApp SDK (initDataUnsafe), который доступен независимо
+    // от способа открытия.
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+      if (!userId) userId = String(tg.initDataUnsafe.user.id);
+      // chatId для личных сообщений совпадает с user.id; для групп Telegram не передаёт
+      // chat.id напрямую через initDataUnsafe в большинстве случаев — поэтому используем
+      // userId как chatId по умолчанию (работает для личных чатов с ботом).
+      if (!chatId) chatId = userId;
+    }
+
     var mainView = document.getElementById('mainView');
     var resultArea = document.getElementById('resultArea');
     var loadingEl = document.getElementById('loading');
@@ -174,6 +186,18 @@
         if (action === 'topweek') loadTopWeek(metric);
       });
     });
+
+    // Если кнопка в чате вела сразу на конкретный раздел (?view=top&metric=ba) —
+    // открываем его автоматически, минуя главный экран меню. Так "/start" в чате
+    // может иметь отдельную кнопку на каждый топ-лист, как раньше, но результат
+    // показывается в этом же удобном окне, а не текстом в чат.
+    var directView = params.get('view');
+    var directMetric = params.get('metric');
+    if (directView === 'top' && apiUrl) {
+      loadTop(directMetric || 'ba');
+    } else if (directView === 'topweek' && apiUrl) {
+      loadTopWeek(directMetric || 'ba');
+    }
   </script>
 </body>
 </html>
