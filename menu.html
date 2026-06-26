@@ -31,6 +31,7 @@
     <button class="menu-btn" data-action="topweek" data-metric="ba">⚔️ Топ/Аутсайдеры БА (неделя)</button>
     <button class="menu-btn" data-action="top" data-metric="contrib">💰 Топ/Аутсайдеры Взносы (сегодня)</button>
     <button class="menu-btn" data-action="topweek" data-metric="contrib">💰 Топ/Аутсайдеры Взносы (неделя)</button>
+    <button class="menu-btn" data-action="vacationers">🏖 Кто сейчас в отпуске</button>
     <button class="menu-btn" id="goVacation">🏖 Добавить в отпуск</button>
     <button class="menu-btn" id="goMember">📋 Вступил / Вышел / Исключен</button>
   </div>
@@ -174,6 +175,51 @@
         });
     }
 
+    function renderVacationers(data) {
+      if (data.error) {
+        errorEl.textContent = data.error;
+        errorEl.style.display = 'block';
+        return;
+      }
+      var html = '';
+      html += '<div class="section-title">🌴 В отпуске (' + data.vacation.length + ')</div>';
+      if (data.vacation.length === 0) {
+        html += '<div class="row" style="color:#888;">Никого нет</div>';
+      } else {
+        data.vacation.forEach(function (v) {
+          html += '<div class="row">' + v.nick + ' — с ' + v.start + ' до ' + v.end + '</div>';
+        });
+      }
+      html += '<div class="section-title">⚠️ Временные пропуски (' + data.intermittent.length + ')</div>';
+      if (data.intermittent.length === 0) {
+        html += '<div class="row" style="color:#888;">Никого нет</div>';
+      } else {
+        data.intermittent.forEach(function (v) {
+          html += '<div class="row">' + v.nick + ' — с ' + v.start + ' до ' + v.end + '</div>';
+        });
+      }
+      contentEl.innerHTML = html;
+    }
+
+    function loadVacationers() {
+      showResult();
+      loadingEl.style.display = 'block';
+      errorEl.style.display = 'none';
+      contentEl.innerHTML = '';
+
+      fetch(apiUrl + '?action=vacationers')
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          loadingEl.style.display = 'none';
+          renderVacationers(data);
+        })
+        .catch(function (err) {
+          loadingEl.style.display = 'none';
+          errorEl.textContent = '❌ Ошибка соединения: ' + err.message;
+          errorEl.style.display = 'block';
+        });
+    }
+
     document.querySelectorAll('.menu-btn[data-action]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (!apiUrl) {
@@ -184,6 +230,7 @@
         var metric = btn.getAttribute('data-metric');
         if (action === 'top') loadTop(metric);
         if (action === 'topweek') loadTopWeek(metric);
+        if (action === 'vacationers') loadVacationers();
       });
     });
 
@@ -197,6 +244,8 @@
       loadTop(directMetric || 'ba');
     } else if (directView === 'topweek' && apiUrl) {
       loadTopWeek(directMetric || 'ba');
+    } else if (directView === 'vacationers' && apiUrl) {
+      loadVacationers();
     }
   </script>
 </body>
