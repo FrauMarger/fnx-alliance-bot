@@ -46,7 +46,12 @@
     var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
     if (tg) { tg.expand(); tg.ready(); }
 
-    // Параметры передаются ботом в URL кнопки: chatId, userId, api (адрес Apps Script)
+    // Список ников теперь берём с Cloudflare Worker — он стабильнее старого
+    // Apps Script (не даёт периодических 302-редиректов).
+    var NICKNAMES_API_URL = 'https://fnx-alliance-bot.ajattarka.workers.dev/nicknames';
+
+    // Параметры передаются ботом в URL кнопки: chatId, userId, api (адрес Apps Script —
+    // используется для отправки самой формы, это не меняем).
     var params = new URLSearchParams(window.location.search);
     var chatId = params.get('chatId');
     var userId = params.get('userId');
@@ -67,26 +72,26 @@
 
     if (!apiUrl) {
       showStatus('⚠️ Не удалось определить адрес сервера. Откройте форму заново через /start.', 'error');
-    } else {
-      // Подгружаем список ников для автодополнения — статичная страница не может
-      // вызвать функцию Apps Script напрямую, поэтому запрашиваем через fetch().
-      fetch(apiUrl + '?action=nicknames')
-        .then(function (resp) { return resp.json(); })
-        .then(function (data) {
-          if (data.ok && Array.isArray(data.nicknames)) {
-            var list = document.getElementById('nickList');
-            data.nicknames.forEach(function (n) {
-              var opt = document.createElement('option');
-              opt.value = n;
-              list.appendChild(opt);
-            });
-          }
-        })
-        .catch(function (err) {
-          // Не критично — форма всё равно работает, просто без автодополнения
-          console.log('Не удалось загрузить список ников: ' + err.message);
-        });
     }
+
+    // Подгружаем список ников для автодополнения — с Cloudflare Worker,
+    // не зависит от доступности apiUrl (Apps Script).
+    fetch(NICKNAMES_API_URL)
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        if (data.ok && Array.isArray(data.nicknames)) {
+          var list = document.getElementById('nickList');
+          data.nicknames.forEach(function (n) {
+            var opt = document.createElement('option');
+            opt.value = n;
+            list.appendChild(opt);
+          });
+        }
+      })
+      .catch(function (err) {
+        // Не критично — форма всё равно работает, просто без автодополнения
+        console.log('Не удалось загрузить список ников: ' + err.message);
+      });
 
     // Сегодняшняя дата по умолчанию
     var today = new Date().toISOString().split('T')[0];
