@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: sans-serif; padding: 15px; background: var(--tg-theme-bg-color, #ffffff); color: var(--tg-theme-text-color, #000000); }
+  input, select { width: 100%; padding: 10px; margin: 5px 0 10px 0; box-sizing: border-box; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+  label { font-weight: bold; font-size: 14px; }
+  button { background: var(--tg-theme-button-color, #4285f4); color: var(--tg-theme-button-text-color, #ffffff); padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
+  .score-hint { font-size: 12px; color: var(--tg-theme-hint-color, #666); min-height: 16px; margin-top: -6px; margin-bottom: 8px; }
+  .score-hint.ok { color: #1a7d1a; }
+  .score-hint.warn { color: #b06a00; }
+  #diag { font-size: 12px; color: #c00; white-space: pre-wrap; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <h3>🚚 Внести/изменить Караван</h3>
+
+  <label>Дата каравана:</label>
+  <input type="date" id="date">
+
+  <label>Кучер:</label>
+  <input list="nickList" id="kucher" placeholder="Начните вводить ник...">
+  <div class="score-hint" id="kucherHint"></div>
+
+  <label>VIP:</label>
+  <input list="nickList" id="vip" placeholder="Начните вводить ник...">
+  <div class="score-hint" id="vipHint"></div>
+
+  <datalist id="nickList"></datalist>
+
+  <button type="button" id="saveBtn">Сохранить</button>
+  <div id="diag"></div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    function showDiag(msg) { document.getElementById('diag').textContent += msg + '\n'; }
+
+    var params = new URLSearchParams(window.location.search);
+    var API_URL = params.get('api');
+    var tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+    if (tg) tg.expand();
+
+    if (!API_URL) showDiag('⚠️ Не передан адрес API (?api=...) — форма не сможет сохранить данные.');
+
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementById('date').value = today;
+
+    // Список ников — используем тот же /nicknames маршрут воркера
+    if (API_URL) {
+      var nicksUrl = API_URL.replace(/\/api\/karavan.*$/, '/nicknames');
+      fetch(nicksUrl)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok) return;
+          var list = document.getElementById('nickList');
+          data.nicknames.forEach(function(n) {
+            var opt = document.createElement('option');
+            opt.value = n;
+            list.appendChild(opt);
+          });
+        })
+        .catch(function(e) { showDiag('Не удалось загрузить список ников: ' + e.message); });
+    }
+
+    function refreshHint(inputId, hintId) {
+      var nick = document.getElementById(inputId).value.trim();
+      var date = document.getElementById('date').value;
+      var hintEl = document.getElementById(hintId);
+      if (!nick || !date || !API_URL) { hintEl.textContent = ''; return; }
+
+      hintEl.textContent = 'Считаю коэффициент...';
+      hintEl.className = 'score-hint';
+
+      var scoreUrl = API_URL.replace(/\/api\/karavan.*$/, '/api/karavan/score') +
+        '?nick=' + encodeURIComponent(nick) + '&date=' + encodeURIComponent(date);
+
+      fetch(scoreUrl)
+        .then(function(r) { return r.json(); })
+        .then(function(info) {
+          if (info.found) {
+            hintEl.textContent = 'Коэффициент: ' + info.score + ' (сила: ' + info.strength + ')';
+            hintEl.className = 'score-hint ok';
+          } else {
+            hintEl.textContent = 'Коэффициент не найден (нет в базе / не прошёл допуск)';
+            hintEl.className = 'score-hint warn';
+          }
+        })
+        .catch(function() { hintEl.textContent = ''; });
+    }
+
+    document.getElementById('kucher').addEventListener('blur', function() { refreshHint('kucher', 'kucherHint'); });
+    document.getElementById('vip').addEventListener('blur', function() { refreshHint('vip', 'vipHint'); });
+    document.getElementById('date').addEventListener('change', function() {
+      refreshHint('kucher', 'kucherHint');
+      refreshHint('vip', 'vipHint');
+    });
+
+    function submitForm(confirmed) {
+      var payload = {
+        date: document.getElementById('date').value,
+        kucher: document.getElementById('kucher').value.trim(),
+        vip: document.getElementById('vip').value.trim(),
+        confirmed: !!confirmed,
+      };
+
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(result) {
+          if (result.conflict) {
+            var msg = 'На эту дату уже внесено:\n' +
+              result.conflicts.map(function(c) { return c.role + ': "' + c.from + '" → "' + c.to + '"'; }).join('\n') +
+              '\n\nЗаменить?';
+            if (confirm(msg)) submitForm(true);
+            return;
+          }
+          alert(result.message || (result.ok ? 'Сохранено' : 'Ошибка'));
+          if (result.ok && tg) tg.close();
+        })
+        .catch(function(e) { showDiag('❌ Ошибка запроса: ' + e.message); });
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', function() {
+      var date = document.getElementById('date').value;
+      var kucher = document.getElementById('kucher').value.trim();
+      var vip = document.getElementById('vip').value.trim();
+      if (!date) { alert('Укажите дату.'); return; }
+      if (!kucher && !vip) { alert('Укажите хотя бы Кучера или VIP.'); return; }
+      submitForm(false);
+    });
+  </script>
+</body>
+</html>
